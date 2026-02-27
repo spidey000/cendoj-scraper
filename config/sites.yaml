@@ -1,0 +1,51 @@
+# Site selection filters - only scrape PDF sentences
+sites:
+  - base_url: "https://www.cendoj.es"
+    paths:
+      - "/contenido.asp?cat=1"
+    selectors:
+      pdf_link: "a[href$='.pdf']"
+      pagination: ".pagination a"
+      content_table: "table.contenido"
+    patterns:
+      pdf_url: "\.pdf$"
+      date: "\d{2}/\d{2}/\d{4}"
+
+# Request configuration
+request:
+  timeout: 30
+  retry_attempts: 3
+  retry_delay: 1
+  headers:
+    User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+
+# Storage configuration
+storage:
+  database: "data/cendoj.db"
+  pdf_dir: "data/pdfs"
+  backup_dir: "data/backups"
+
+# Logging configuration
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "logs/cendoj_scraper.log"
+  max_bytes: 10485760  # 10MB
+  backup_count: 5
+
+# Browser/Stealth configuration
+browser:
+  headless: true
+  stealth: true
+  timeout: 30000
+  viewport:
+    width: 1920
+    height: 1080
+
+# Rate limiting
+rate_limit:
+  requests_per_minute: 30
+  burst_size: 5
+
+# Proxy configuration (optional)
+proxy: null  # or "http://user:pass@host:port"
