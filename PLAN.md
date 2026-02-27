@@ -140,6 +140,13 @@ USER_AGENT_* (for fingerprint customization)
 4. **Week 4**: Polish, error handling, documentation
 5. **Week 5**: Testing, GitHub repo, initial release
 
+## Development Workflow
+
+- [ ] Commit locally after completing each feature or significant change
+- [ ] Push to remote repository after each commit
+- [ ] Use descriptive commit messages following conventional commits
+- [ ] Ensure tests pass before committing
+
 ## Risks & Mitigations
 
 | Risk | Probability | Impact | Mitigation |
