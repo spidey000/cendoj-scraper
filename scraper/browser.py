@@ -3,8 +3,8 @@
 import asyncio
 from typing import Optional
 from playwright.async_api import async_playwright, Browser, Page, BrowserContext
-from ..utils.fingerprint import FingerprintSpoofer
-from ..utils.logger import get_logger
+from cendoj.scraper.fingerprint import FingerprintSpoofer
+from cendoj.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

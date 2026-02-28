@@ -83,7 +83,7 @@ class PDFLink(Base):
     last_accessed = Column(DateTime)
     extraction_method = Column(String)  # css|xpath|deep_crawl|sitemap|regex|script_scan
     extraction_confidence = Column(Float, default=1.0)  # 0-1 confidence score
-    metadata = Column(JSON)  # {"depth": 2, "site_key": "cendoj", "collection": "..."}
+    metadata_json = Column(JSON)  # {"depth": 2, "site_key": "cendoj", "collection": "..."}
 
     __table_args__ = (
         Index('idx_pdf_links_normalized_url', 'normalized_url', unique=True),

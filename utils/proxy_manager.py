@@ -11,7 +11,7 @@ from collections import defaultdict, deque
 from dataclasses import dataclass, asdict
 from urllib.parse import urlparse
 import random
-from ..utils.logger import get_logger
+from cendoj.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

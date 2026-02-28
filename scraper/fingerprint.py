@@ -3,7 +3,7 @@
 import json
 import random
 from typing import Dict, Any
-from ..utils.logger import get_logger
+from cendoj.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

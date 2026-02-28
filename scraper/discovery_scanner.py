@@ -278,7 +278,10 @@ class DiscoveryScanner:
 
     def _load_strategies(self):
         """Instantiate enabled discovery strategies."""
-        available = [SitemapStrategy]
+        from cendoj.scraper.strategies.pattern_generator import PatternGenerator
+        from cendoj.scraper.strategies.search_explorer import SearchExplorer
+        from cendoj.scraper.strategies.taxonomy import TaxonomyStrategy
+        available = [SitemapStrategy, PatternGenerator, SearchExplorer, TaxonomyStrategy]
         self.strategies = []
         for strategy_cls in available:
             strategy = strategy_cls(

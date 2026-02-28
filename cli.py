@@ -11,13 +11,14 @@ from typing import Optional
 import click
 from sqlalchemy import func
 
-# Add project root to path
+# Add project root to path (kept for backward compatibility when running as script)
 sys.path.insert(0, str(Path(__file__).parent))
 
-from config.settings import Config
-from scraper.discovery_scanner import DiscoveryScanner
-from storage.database import get_session, init_db
-from storage.schemas import PDFLink, DiscoverySession
+from cendoj.config.settings import Config
+from cendoj.scraper.discovery_scanner import DiscoveryScanner
+from cendoj.storage.database import get_session, init_db
+from cendoj.storage.schemas import PDFLink, DiscoverySession
+from cendoj.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -84,7 +85,8 @@ def discover(ctx, mode: str, validate: bool, resume: bool, limit: int):
                 
                 # Show progress
                 if count % 10 == 0:
-                    status = "✅" if pdf.get('validation', {}).get('accessible') else "❌"
+                    validation = pdf.get('validation') or {}
+                    status = "✅" if validation.get('accessible') else "❌"
                     click.echo(f"   {count}. {pdf['url'][:80]}... {status}")
                 
                 if limit > 0 and count >= limit:
@@ -175,7 +177,7 @@ def stats(ctx):
 def proxies(ctx):
     """Mostrar estado del pool de proxies."""
     try:
-        from utils.proxy_manager import ProxyManager
+        from cendoj.utils.proxy_manager import ProxyManager
         
         config = Config(ctx.obj['config_path'])
         pm = ProxyManager({'min_proxies_required': 100}, cache_file='data/proxies_cache.json')
@@ -268,7 +270,7 @@ def export(ctx, output: str, status: str, limit: int):
                 'final_url': link.final_url,
                 'extraction_method': link.extraction_method,
                 'extraction_confidence': link.extraction_confidence,
-                'metadata': link.metadata,
+                'metadata': link.metadata_json,
             })
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)

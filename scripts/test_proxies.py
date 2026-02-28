@@ -9,8 +9,8 @@ from collections import defaultdict
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from utils.proxy_manager import ProxyManager
-from config.settings import Config
+from cendoj.utils.proxy_manager import ProxyManager
+from cendoj.config.settings import Config
 
 async def stress_test(pm: ProxyManager, duration_minutes: int = 5, requests_per_proxy: int = 10):
     """

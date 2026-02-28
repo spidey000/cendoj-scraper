@@ -274,6 +274,43 @@ class Config:
             'exclude_patterns': [],
         })
 
+    @property
+    def pattern_generator_config(self) -> Dict:
+        """Return pattern generator discovery configuration."""
+        return self._config.get('pattern_generator', {
+            'enabled': False,
+            'min_samples': 100,
+            'max_urls': 10000,
+            'include_patterns': [],
+            'exclude_patterns': [],
+        })
+
+    @property
+    def search_explorer_config(self) -> Dict:
+        """Return search explorer discovery configuration."""
+        return self._config.get('search_explorer', {
+            'enabled': False,
+            'max_results': 50000,
+            'max_per_request': 1000,
+            'timeout_seconds': 60,
+            'include_patterns': [],
+            'exclude_patterns': [],
+        })
+
+    @property
+    def taxonomy_config(self) -> Dict:
+        """Return taxonomy discovery configuration."""
+        return self._config.get('taxonomy', {
+            'enabled': False,
+            'max_pages_per_site': 100,
+            'selectors': [
+                'nav a', '.menu a', '.sidebar a', '.navigation a', '.nav-menu a',
+                '[role="navigation"] a', '.breadcrumb a'
+            ],
+            'include_patterns': [],
+            'exclude_patterns': [],
+        })
+
     # ========== ANTI-BLOCKING CONFIG ==========
     @property
     def anti_blocking_config(self) -> Dict:

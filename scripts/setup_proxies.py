@@ -8,8 +8,8 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from utils.proxy_manager import ProxyManager
-from config.settings import Config
+from cendoj.utils.proxy_manager import ProxyManager
+from cendoj.config.settings import Config
 
 async def main():
     """Main entry point."""

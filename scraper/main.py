@@ -13,7 +13,7 @@ from .navigator import CendojNavigator
 from .downloader import DownloadManager
 from .storage.database import Database
 from .config.settings import Settings
-from .utils.logger import get_logger
+from cendoj.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

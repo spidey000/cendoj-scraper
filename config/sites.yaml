@@ -86,6 +86,44 @@ sitemap:
   timeout_seconds: 30
 
 # ============================================
+# PATTERN GENERATOR DISCOVERY (Optional)
+# ============================================
+pattern_generator:
+  enabled: false
+  min_samples: 100  # minimum URLs needed from DB to infer patterns
+  max_urls: 10000
+  include_patterns: []  # regex filters for candidate URLs
+  exclude_patterns: []
+
+# ============================================
+# SEARCH EXPLORER DISCOVERY (Optional)
+# ============================================
+search_explorer:
+  enabled: false
+  max_results: 50000
+  max_per_request: 1000
+  timeout_seconds: 60
+  include_patterns: []
+  exclude_patterns: []
+
+# ============================================
+# TAXONOMY DISCOVERY (Optional)
+# ============================================
+taxonomy:
+  enabled: false
+  max_pages_per_site: 100
+  selectors:
+    - 'nav a'
+    - '.menu a'
+    - '.sidebar a'
+    - '.navigation a'
+    - '.nav-menu a'
+    - '[role="navigation"] a'
+    - '.breadcrumb a'
+  include_patterns: []
+  exclude_patterns: []
+
+# ============================================
 # ANTI-BLOCKING STACK
 # ============================================
 anti_blocking:

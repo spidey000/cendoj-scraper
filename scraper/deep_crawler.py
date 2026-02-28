@@ -8,15 +8,14 @@ from urllib.parse import urljoin, urlparse
 from datetime import datetime
 from pathlib import Path
 import pickle
-import json
 
 from playwright.async_api import Page
 
-from .models import Sentence
-from .browser import BrowserManager
-from ..utils.logger import get_logger
-from ..storage.database import get_session
-from ..storage.schemas import PDFLink
+from cendoj.scraper.models import Sentence
+from cendoj.scraper.browser import BrowserManager
+from cendoj.utils.logger import get_logger
+from cendoj.storage.database import get_session
+from cendoj.storage.schemas import PDFLink
 
 logger = get_logger(__name__)
 
@@ -390,10 +389,10 @@ class DeepCrawler:
                 status='discovered',
                 extraction_method=pdf_data.get('method', 'unknown'),
                 extraction_confidence=pdf_data.get('confidence', 1.0),
-                metadata=json.dumps({
+                metadata_json={
                     'depth': pdf_data.get('depth', 0),
                     'source': pdf_data.get('source_url'),
-                })
+                }
             )
 
             db_session.add(pdf_link)

@@ -7,10 +7,10 @@ from typing import Optional
 
 from tenacity import retry, retry_if_exception_type, wait_random_exponential
 
-from config.settings import Settings
-from .models import Sentence
-from .utils.logger import get_logger
-from .utils.rate_limiter import RateLimiter
+from cendoj.config.settings import Settings
+from cendoj.scraper.models import Sentence
+from cendoj.utils.logger import get_logger
+from cendoj.utils.rate_limiter import RateLimiter
 
 
 logger = get_logger(__name__)

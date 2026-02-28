@@ -7,7 +7,7 @@ from pathlib import Path
 from datetime import datetime
 from playwright.async_api import Page
 from typing import Optional, Tuple
-from ..utils.logger import get_logger
+from cendoj.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

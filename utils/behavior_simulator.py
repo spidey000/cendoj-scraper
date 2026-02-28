@@ -4,7 +4,7 @@ import asyncio
 import random
 from typing import Optional
 from playwright.async_api import Page
-from ..utils.logger import get_logger
+from cendoj.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

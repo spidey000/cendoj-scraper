@@ -1,10 +1,9 @@
 """Database engine and session management."""
 import os
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
-from sqlalchemy.ext.declarative import DeclarativeMeta
+from sqlalchemy.orm import sessionmaker
 
-Base = declarative_base()
+from cendoj.storage.schemas import Base
 
 # Global variables (initialized in init_db)
 _engine = None
@@ -30,9 +29,6 @@ def init_db(db_path: str = "data/cendoj.db"):
 
     # Create session factory
     _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
-
-    # Import models to ensure they're registered with Base
-    from . import schemas  # noqa: F401
 
     # Create tables
     Base.metadata.create_all(bind=_engine)

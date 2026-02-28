@@ -3,7 +3,7 @@
 import random
 from pathlib import Path
 from typing import List, Optional
-from ..utils.logger import get_logger
+from cendoj.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -22,6 +22,7 @@ class UserAgentPool:
         self.user_agents: List[str] = []
         self._index = 0
         self.session_ua: Optional[str] = None
+        self.logger = logger
         self.load()
 
     def load(self):

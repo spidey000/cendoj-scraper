@@ -3,24 +3,28 @@
 import asyncio
 import time
 from functools import wraps
-from typing import Callable, Any
+from typing import Callable, Any, Optional
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception
-from ..utils.logger import get_logger
+from cendoj.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 class RateLimiter:
     """Simple rate limiter for async operations."""
 
-    def __init__(self, rate: float = 1.0):
-        """
-        Initialize rate limiter.
-
-        Args:
-            rate: Minimum seconds between operations
-        """
-        self.rate = rate
-        self.last_call = 0
+    def __init__(
+        self,
+        rate: Optional[float] = None,
+        requests_per_minute: Optional[float] = None,
+    ):
+        """Initialize rate limiter."""
+        if rate is None:
+            if requests_per_minute and requests_per_minute > 0:
+                rate = 60.0 / requests_per_minute
+            else:
+                rate = 1.0
+        self.rate = max(rate, 0.0)
+        self.last_call = 0.0
         self._lock = asyncio.Lock()
 
     async def wait(self):
@@ -28,7 +32,7 @@ class RateLimiter:
         async with self._lock:
             now = time.time()
             time_since_last = now - self.last_call
-            if time_since_last < self.rate:
+            if self.rate > 0 and time_since_last < self.rate:
                 await asyncio.sleep(self.rate - time_since_last)
             self.last_call = time.time()
 

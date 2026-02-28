@@ -22,63 +22,70 @@ print(f'Seed URLs: {len(result.seed_urls)}')
 - **Approach:**
   - Analyze discovered URLs to infer templates (e.g., `/2024/01/28079-2024-00001.pdf`).
   - Enumerate date ranges and numeric sequences; enqueue generated URLs for validation.
-- **Status:** Planned. Implement as `scraper/strategies/pattern_generator.py` using regex grouping and heuristics for parameter detection.
+- **Status:** ✅ Implemented. See `scraper/strategies/pattern_generator.py`. The implementation loads existing PDF URLs from the database, identifies numeric sequences in filenames using skeleton templates (replacing the numeric token with `{SEQ}`), then fills gaps between the minimum and maximum sequence values while preserving zero-padding. Includes `include_patterns`/`exclude_patterns` filtering and respects a `max_urls` limit.
 
 ```python
-# scraper/strategies/pattern_generator.py (planned)
+# scraper/strategies/pattern_generator.py (implemented)
 class PatternGenerator(DiscoveryStrategy):
     name = "pattern_generator"
 
     async def discover(self) -> StrategyResult:
-        urls = self._load_samples()
-        patterns = self._infer_patterns(urls)
-        generated = self._enumerate_sequences(patterns)
-        return StrategyResult(seed_urls=generated, metadata={"patterns": patterns})
+        urls = await self._load_urls()           # from DB
+        filtered = self._filter_urls(urls)
+        generated = await self._generate_missing(filtered)
+        return StrategyResult(seed_urls=generated, metadata={
+            'sample_count': len(filtered),
+            'generated_count': len(generated)
+        })
 ```
 
 ## 3. Exhaustive Search API Exploration
-- **Purpose:** Pull complete historical data beyond the “latest sentences” feed by iterating search parameters.
+- **Purpose:** Pull complete historical data beyond the "latest sentences" feed by iterating search parameters.
 - **Approach:**
   - Automate POST requests to `search/search.action`, covering jurisdiction × date grids, keyword combinations, and court filters.
   - Respect per-request limits, rotate proxies, and capture CAPTCHA events.
-- **Status:** Planned. Will become a strategy that emits both seed URLs and direct PDF records when HTML responses already contain download links.
+- **Status:** ✅ Implemented. See `scraper/strategies/search_explorer.py`. The implementation iterates over jurisdictions and quarterly date ranges (last 20 years by default), POSTs to the configured search endpoint, and parses PDF URLs from the returned HTML. Results are deduplicated and filtered. Configurable `max_results`, `max_per_request`, and optional include/exclude patterns are respected.
 
 ```python
-# scraper/strategies/search_explorer.py (planned)
+# scraper/strategies/search_explorer.py (implemented)
 class SearchExplorer(DiscoveryStrategy):
-    async def discover(self) -> StrategyResult:
-        seeds = []
-        api = self.config.sites[0]['api']
-        for jurisdiction in api['jurisdictions']:
-            for start, end in self._quarter_ranges():
-                payload = self._build_payload(jurisdiction, start, end)
-                html = await self._post(api['search_url'], payload)
-                seeds.extend(self._parse_results(html))
-        return StrategyResult(seed_urls=seeds)
-```
+    name = "search_explorer"
 
-## 4. Taxonomy & Collection Enumeration
-- **Purpose:** Reconstruct the website’s navigation hierarchy to ensure every collection/year/section is visited.
-- **Approach:**
-  - Parse navigation menus, tables, and sidebar lists to build a graph of collections.
-  - Traverse each node to gather seed URLs for the crawler.
-- **Status:** Planned; will leverage Playwright/BrowserManager to fetch and parse DOM trees.
-
-```python
-# scraper/strategies/taxonomy.py (planned)
-class TaxonomyStrategy(DiscoveryStrategy):
     async def discover(self) -> StrategyResult:
         seeds = []
         for site in self.config.sites:
+            api_url = site.get('api', {}).get('search_url')
+            jurisdictions = site.get('api', {}).get('jurisdictions', [])
+            for jurisdiction in jurisdictions:
+                for start, end in self._quarter_ranges():
+                    payload = self._build_payload(jurisdiction, start, end)
+                    html = await self._post(api_url, payload)
+                    seeds.extend(self._parse_html_for_pdfs(html, site['base_url']))
+        return StrategyResult(seed_urls=self._filter_urls(seeds))
+```
+
+## 4. Taxonomy & Collection Enumeration
+- **Purpose:** Reconstruct the website's navigation hierarchy to ensure every collection/year/section is visited.
+- **Approach:**
+  - Parse navigation menus, tables, and sidebar lists to build a graph of collections.
+  - Traverse each node to gather seed URLs for the crawler.
+- **Status:** ✅ Implemented. See `scraper/strategies/taxonomy.py`. Uses the shared `BrowserManager` to visit the base URL and extracts links from a wide set of CSS selectors (nav, menus, sidebars, breadcrumbs). Performs a limited BFS (depth 1) on discovered navigation pages to expand coverage. Filters and deduplication are applied, and limits prevent runaway resource use.
+
+```python
+# scraper/strategies/taxonomy.py (implemented)
+class TaxonomyStrategy(DiscoveryStrategy):
+    name = "taxonomy"
+
+    async def discover(self) -> StrategyResult:
+        seeds = set()
+        for site in self.config.sites:
+            base_url = site.get('base_url')
             page = await self.browser_manager.new_page()
-            await page.goto(site['base_url'])
-            links = await page.locator('nav a, .menu a').all()
-            for link in links:
-                href = await link.get_attribute('href')
-                if href:
-                    seeds.append(urljoin(site['base_url'], href))
+            await page.goto(base_url)
+            links = await self._extract_links(page, base_url)
+            seeds.update(links)
             await page.close()
-        return StrategyResult(seed_urls=list(dict.fromkeys(seeds)))
+        return StrategyResult(seed_urls=list(seeds))
 ```
 
 ## 5. Breadcrumb Trail Analysis

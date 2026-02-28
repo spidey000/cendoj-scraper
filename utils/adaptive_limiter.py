@@ -4,7 +4,7 @@ import asyncio
 import time
 from collections import deque
 from typing import Optional
-from ..utils.logger import get_logger
+from cendoj.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
