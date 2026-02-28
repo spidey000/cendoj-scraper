@@ -267,7 +267,7 @@ class FileManager:
         result['size_bytes'] = file_path.stat().st_size
 
         # Calculate SHA256
-       sha256_hash = hashlib.sha256()
+        sha256_hash = hashlib.sha256()
         with open(file_path, 'rb') as f:
             for chunk in iter(lambda: f.read(8192), b''):
                 sha256_hash.update(chunk)
