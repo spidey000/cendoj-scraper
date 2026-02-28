@@ -1,5 +1,5 @@
 import yaml
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 class Config:
     def __init__(self, config_path: str = "config/sites.yaml"):
@@ -218,3 +218,245 @@ class Config:
     def validate_url_timeout(self) -> int:
         """Return timeout for URL validation requests in seconds."""
         return self.download_config.get('validate_url_timeout', 10)
+
+    # ========== DISCOVERY CONFIG ==========
+    @property
+    def discovery_config(self) -> Dict:
+        """Return discovery configuration."""
+        return self._config.get('discovery', {
+            'mode': 'full',
+            'max_depth': 0,
+            'follow_internal_links': True,
+            'follow_external_links': False,
+            'extract_from_scripts': True,
+            'max_pages_per_collection': 0,
+            'respect_robots_txt': False,
+            'validate_on_discovery': True,
+            'deduplicate': True,
+            'dedup_normalize_urls': True,
+        })
+
+    @property
+    def discovery_mode(self) -> str:
+        """Return discovery mode."""
+        return self.discovery_config.get('mode', 'full')
+
+    @property
+    def discovery_max_depth(self) -> int:
+        """Return max depth for deep crawl (0 = unlimited)."""
+        return self.discovery_config.get('max_depth', 0)
+
+    @property
+    def discovery_validate_on_discovery(self) -> bool:
+        """Whether to validate URLs (HEAD request) after discovery."""
+        return self.discovery_config.get('validate_on_discovery', True)
+
+    @property
+    def discovery_deduplicate(self) -> bool:
+        """Whether to deduplicate discovered URLs."""
+        return self.discovery_config.get('deduplicate', True)
+
+    # ========== ANTI-BLOCKING CONFIG ==========
+    @property
+    def anti_blocking_config(self) -> Dict:
+        """Return anti-blocking configuration."""
+        return self._config.get('anti_blocking', {})
+
+    @property
+    def proxy_enabled(self) -> bool:
+        """Whether proxy rotation is enabled."""
+        return self.anti_blocking_config.get('proxy', {}).get('enabled', True)
+
+    @property
+    def proxy_sources(self) -> List[str]:
+        """List of proxy source names to use."""
+        return self.anti_blocking_config.get('proxy', {}).get('sources', ['proxifly', 'proxyscraper'])
+
+    @property
+    def proxy_refresh_hours(self) -> int:
+        """How often to refresh proxy pool in hours."""
+        return self.anti_blocking_config.get('proxy', {}).get('refresh_hours', 6)
+
+    @property
+    def proxy_min_anonymity(self) -> str:
+        """Minimum anonymity level required."""
+        return self.anti_blocking_config.get('proxy', {}).get('min_anonymity', 'elite')
+
+    @property
+    def proxy_require_https(self) -> bool:
+        """Whether to require HTTPS support."""
+        return self.anti_blocking_config.get('proxy', {}).get('require_https', False)
+
+    @property
+    def proxy_test_before_use(self) -> bool:
+        """Whether to test proxies before using them."""
+        return self.anti_blocking_config.get('proxy', {}).get('test_before_use', True)
+
+    @property
+    def proxy_rotate_per_request(self) -> bool:
+        """Whether to rotate proxy for each request."""
+        return self.anti_blocking_config.get('proxy', {}).get('rotate_per_request', True)
+
+    @property
+    def proxy_rotate_on_error(self) -> bool:
+        """Whether to rotate proxy on error (429, 403, etc)."""
+        return self.anti_blocking_config.get('proxy', {}).get('rotate_on_error', True)
+
+    @property
+    def ua_pool_file(self) -> str:
+        """Path to user agents file."""
+        return self.anti_blocking_config.get('user_agent', {}).get('pool_file', 'config/user_agents.txt')
+
+    @property
+    def ua_rotate_per_session(self) -> bool:
+        """Whether to rotate user agent per session."""
+        return self.anti_blocking_config.get('user_agent', {}).get('rotate_per_session', True)
+
+    @property
+    def ua_rotate_per_request(self) -> bool:
+        """Whether to rotate user agent per request."""
+        return self.anti_blocking_config.get('user_agent', {}).get('rotate_per_request', False)
+
+    @property
+    def behavior_simulate_human(self) -> bool:
+        """Whether to simulate human behavior."""
+        return self.anti_blocking_config.get('behavior', {}).get('simulate_human', True)
+
+    @property
+    def behavior_random_delays_enabled(self) -> bool:
+        """Whether to use random delays."""
+        return self.anti_blocking_config.get('behavior', {}).get('random_delays', {}).get('enabled', True)
+
+    @property
+    def behavior_min_delay(self) -> float:
+        """Minimum delay in seconds."""
+        return self.anti_blocking_config.get('behavior', {}).get('random_delays', {}).get('min', 1.0)
+
+    @property
+    def behavior_max_delay(self) -> float:
+        """Maximum delay in seconds."""
+        return self.anti_blocking_config.get('behavior', {}).get('random_delays', {}).get('max', 5.0)
+
+    @property
+    def behavior_delay_distribution(self) -> str:
+        """Delay distribution: uniform, normal, exponential."""
+        return self.anti_blocking_config.get('behavior', {}).get('random_delays', {}).get('distribution', 'normal')
+
+    @property
+    def behavior_mouse_movements(self) -> bool:
+        """Whether to simulate mouse movements."""
+        return self.anti_blocking_config.get('behavior', {}).get('mouse_movements', False)
+
+    @property
+    def behavior_scrolling(self) -> bool:
+        """Whether to simulate scrolling."""
+        return self.anti_blocking_config.get('behavior', {}).get('scrolling', False)
+
+    @property
+    def rate_limiting_strategy(self) -> str:
+        """Rate limiting strategy: fixed, adaptive, stealth."""
+        return self.anti_blocking_config.get('rate_limiting', {}).get('strategy', 'adaptive')
+
+    @property
+    def rate_limiting_requests_per_minute(self) -> int:
+        """Base requests per minute."""
+        return self.anti_blocking_config.get('rate_limiting', {}).get('requests_per_minute', 20)
+
+    @property
+    def rate_limiting_burst_size(self) -> int:
+        """Burst size for rate limiting."""
+        return self.anti_blocking_config.get('rate_limiting', {}).get('burst_size', 5)
+
+    @property
+    def rate_limiting_backoff_on_429(self) -> bool:
+        """Whether to back off on 429 responses."""
+        return self.anti_blocking_config.get('rate_limiting', {}).get('backoff_on_429', True)
+
+    @property
+    def rate_limiting_max_backoff_seconds(self) -> int:
+        """Maximum backoff time in seconds."""
+        return self.anti_blocking_config.get('rate_limiting', {}).get('max_backoff_seconds', 300)
+
+    @property
+    def rate_limiting_decrease_on_4xx(self) -> bool:
+        """Whether to decrease rate on 4xx errors."""
+        return self.anti_blocking_config.get('rate_limiting', {}).get('decrease_on_4xx', True)
+
+    @property
+    def fingerprint_randomized(self) -> bool:
+        """Whether to randomize browser fingerprint."""
+        return self.anti_blocking_config.get('fingerprint', {}).get('randomized', True)
+
+    @property
+    def fingerprint_rotate_after(self) -> int:
+        """Rotate fingerprint after N requests."""
+        return self.anti_blocking_config.get('fingerprint', {}).get('rotate_after', 50)
+
+    @property
+    def fingerprint_webgl_spoof(self) -> bool:
+        """Whether to spoof WebGL."""
+        return self.anti_blocking_config.get('fingerprint', {}).get('webgl_spoof', True)
+
+    @property
+    def fingerprint_canvas_spoof(self) -> bool:
+        """Whether to spoof Canvas."""
+        return self.anti_blocking_config.get('fingerprint', {}).get('canvas_spoof', True)
+
+    @property
+    def fingerprint_webrtc_leak_protection(self) -> bool:
+        """Whether to enable WebRTC leak protection."""
+        return self.anti_blocking_config.get('fingerprint', {}).get('webrtc_leak_protection', True)
+
+    @property
+    def captcha_auto_detect(self) -> bool:
+        """Whether to automatically detect CAPTCHAs."""
+        return self.anti_blocking_config.get('captcha', {}).get('auto_detect', True)
+
+    @property
+    def captcha_pause_on_captcha(self) -> bool:
+        """Whether to pause when CAPTCHA detected."""
+        return self.anti_blocking_config.get('captcha', {}).get('pause_on_captcha', True)
+
+    @property
+    def captcha_screenshot_on_captcha(self) -> bool:
+        """Whether to take screenshot on CAPTCHA."""
+        return self.anti_blocking_config.get('captcha', {}).get('screenshot_on_captcha', True)
+
+    @property
+    def captcha_manual_solve_timeout(self) -> int:
+        """Timeout for manual CAPTCHA solving in seconds."""
+        return self.anti_blocking_config.get('captcha', {}).get('manual_solve_timeout', 300)
+
+    # ========== BROWSER CONFIG EXPANDED ==========
+    @property
+    def random_viewport(self) -> bool:
+        """Whether to use random viewport."""
+        return self.browser_config.get('random_viewport', True)
+
+    @property
+    def viewport_variations(self) -> List[Dict]:
+        """List of viewport variations to use."""
+        return self.browser_config.get('viewport_variations', [
+            {'width': 1920, 'height': 1080},
+            {'width': 1366, 'height': 768},
+            {'width': 1536, 'height': 864},
+            {'width': 1440, 'height': 900},
+            {'width': 1600, 'height': 900},
+        ])
+
+    # ========== STORAGE CONFIG EXPANDED ==========
+    @property
+    def session_dir(self) -> str:
+        """Directory for session files."""
+        return self.storage_config.get('session_dir', 'data/sessions')
+
+    # ========== LOGGING CONFIG EXPANDED ==========
+    @property
+    def discovery_verbosity(self) -> str:
+        """Discovery logging verbosity: QUIET, NORMAL, VERBOSE, DEBUG."""
+        return self.logging_config.get('discovery_verbosity', 'NORMAL')
+
+    @property
+    def separate_discovery_log(self) -> bool:
+        """Whether to use separate log file for discovery."""
+        return self.logging_config.get('separate_discovery_log', True)

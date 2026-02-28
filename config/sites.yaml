@@ -1,51 +1,169 @@
-# Site selection filters - only scrape PDF sentences
+# ============================================
+# CENDOJ SCRAPER - COMPREHENSIVE CONFIGURATION
+# ============================================
+
+# Site configurations
 sites:
   - base_url: "https://www.cendoj.es"
+    name: "Cendoj Main"
+    enabled: true
     paths:
-      - "/contenido.asp?cat=1"
+      - "/contenido.asp?cat=1"  # Sentences by category
+      # Add more paths as needed:
+      # - "/contenido.asp?cat=2"
+      # - "/contenido.asp?trib=1"
     selectors:
-      pdf_link: "a[href$='.pdf']"
-      pagination: ".pagination a"
       content_table: "table.contenido"
+      row: "table.contenido tr"  # Exclude header
+      pdf_link: "a[href$='.pdf']"
+      pagination:
+        enabled: true
+        next_page: "a[rel='next'], .pagination a[title='Siguiente'], .next a"
+      # Optional selectors for metadata
+      cendoj_number: ".cendoj-number, .numero-exp"  # Adjust as needed
+      court: ".court-name, .tribunal"
+      date: ".fecha, .date"
     patterns:
       pdf_url: "\.pdf$"
       date: "\d{2}/\d{2}/\d{4}"
+      cendoj_id: "([A-Z]+\d+/\d+)"
 
-# Request configuration
+# ============================================
+# DATABASE CONFIGURATION
+# ============================================
+database:
+  path: "data/cendoj.db"
+  store_all_links: true
+  deduplicate: true
+
+# ============================================
+# DISCOVERY CONFIGURATION
+# ============================================
+discovery:
+  mode: "full"  # shallow|deep|full
+  max_depth: 0  # 0 = unlimited (full mode)
+  follow_internal_links: true
+  follow_external_links: false
+  extract_from_scripts: true
+  max_pages_per_collection: 0  # 0 = unlimited
+  respect_robots_txt: false
+  validate_on_discovery: true  # HEAD request after finding PDF
+  deduplicate: true
+  dedup_normalize_urls: true
+
+# ============================================
+# SITEMAP DISCOVERY (Optional)
+# ============================================
+sitemap:
+  enabled: false
+  urls: []  # e.g., ["https://www.cendoj.es/sitemap.xml"]
+  follow_sitemap_links: true
+
+# ============================================
+# ANTI-BLOCKING STACK
+# ============================================
+anti_blocking:
+  proxy:
+    enabled: true
+    sources: ["proxifly", "proxyscraper"]  # Fuentes de proxies
+    refresh_hours: 6
+    min_anonymity: "elite"  # elite|anonymous|transparent
+    require_https: false
+    test_before_use: true
+    rotate_per_request: true
+    rotate_on_error: true  # 429/403/cloudflare
+
+  user_agent:
+    pool_file: "config/user_agents.txt"
+    rotate_per_session: true
+    rotate_per_request: false
+
+  behavior:
+    simulate_human: true
+    random_delays:
+      enabled: true
+      min: 1.0
+      max: 5.0
+      distribution: "normal"  # uniform|normal|exponential
+    mouse_movements: false
+    scrolling: false
+    random_clicks: false
+
+  rate_limiting:
+    strategy: "adaptive"  # fixed|adaptive|stealth
+    requests_per_minute: 20
+    burst_size: 5
+    backoff_on_429: true
+    max_backoff_seconds: 300
+    decrease_on_4xx: true
+
+  fingerprint:
+    randomized: true
+    rotate_after: 50
+    webgl_spoof: true
+    canvas_spoof: true
+    webrtc_leak_protection: true
+
+  captcha:
+    auto_detect: true
+    pause_on_captcha: true
+    screenshot_on_captcha: true
+    manual_solve_timeout: 300  # seconds
+
+# ============================================
+# BROWSER CONFIGURATION
+# ============================================
+browser:
+  headless: true
+  stealth: true
+  timeout: 60000  # 60s for deep crawl
+  viewport:
+    width: 1920
+    height: 1080
+  random_viewport: true
+  viewport_variations:
+    - {width: 1920, height: 1080}
+    - {width: 1366, height: 768}
+    - {width: 1536, height: 864}
+    - {width: 1440, height: 900}
+    - {width: 1600, height: 900}
+
+# ============================================
+# REQUEST CONFIGURATION
+# ============================================
 request:
   timeout: 30
   retry_attempts: 3
   retry_delay: 1
   headers:
-    User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
+    Accept-Language: "es-ES,es;q=0.9,en;q=0.8"
+    # User-Agent will be set from UA pool if enabled
 
-# Storage configuration
+# ============================================
+# STORAGE CONFIGURATION
+# ============================================
 storage:
   database: "data/cendoj.db"
-  pdf_dir: "data/pdfs"
+  pdf_dir: "data/pdfs"  # For optional download mode
   backup_dir: "data/backups"
+  session_dir: "data/sessions"
 
-# Logging configuration
+# ============================================
+# LOGGING CONFIGURATION
+# ============================================
 logging:
   level: "INFO"
+  discovery_verbosity: "NORMAL"  # QUIET|NORMAL|VERBOSE|DEBUG
   format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
   file: "logs/cendoj_scraper.log"
   max_bytes: 10485760  # 10MB
   backup_count: 5
+  separate_discovery_log: true
 
-# Browser/Stealth configuration
-browser:
-  headless: true
-  stealth: true
-  timeout: 30000
-  viewport:
-    width: 1920
-    height: 1080
-
-# Rate limiting
+# ============================================
+# RATE LIMITING (Legacy - see anti_blocking)
+# ============================================
 rate_limit:
   requests_per_minute: 30
   burst_size: 5
-
-# Proxy configuration (optional)
-proxy: null  # or "http://user:pass@host:port"

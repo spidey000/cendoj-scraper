@@ -10,21 +10,37 @@ from .browser import BrowserManager
 from config.settings import Config
 from utils.logger import get_logger
 from utils.rate_limiter import RateLimiter
+from utils.proxy_manager import ProxyManager
+from utils.ua_pool import UserAgentPool
+from utils.captcha_handler import CAPTCHAHandler
 
 
 class Navigator:
     """Navigates configured sites to discover and extract sentence information."""
 
-    def __init__(self, config: Config, browser_manager: Optional[BrowserManager] = None):
+    def __init__(
+        self,
+        config: Config,
+        browser_manager: Optional[BrowserManager] = None,
+        proxy_manager: Optional[ProxyManager] = None,
+        ua_pool: Optional[UserAgentPool] = None,
+        captcha_handler: Optional[CAPTCHAHandler] = None
+    ):
         """
         Initialize Navigator.
 
         Args:
             config: Configuration object containing site definitions
             browser_manager: Optional pre-configured BrowserManager instance
+            proxy_manager: Optional ProxyManager for rotation
+            ua_pool: Optional UserAgentPool for rotation
+            captcha_handler: Optional CAPTCHAHandler
         """
         self.config = config
         self.browser_manager = browser_manager or BrowserManager(config.browser)
+        self.proxy_manager = proxy_manager
+        self.ua_pool = ua_pool
+        self.captcha_handler = captcha_handler
         self.logger = get_logger(__name__, config.logging.file)
         self.rate_limiter = RateLimiter(
             requests_per_minute=config.rate_limit.requests_per_minute,
@@ -81,7 +97,35 @@ class Navigator:
                 continue
 
             try:
-                await page.goto(collection_url)
+                # Set user agent if rotating
+                if self.ua_pool:
+                    ua = self.ua_pool.get_random()
+                    await page.set_extra_http_headers({"User-Agent": ua})
+
+                # Determine proxy for this request
+                proxy = None
+                if self.proxy_manager:
+                    proxy_rec = self.proxy_manager.get_next_proxy()
+                    if proxy_rec:
+                        proxy = proxy_rec.proxy_url
+                        self.logger.debug(f"Using proxy: {proxy}")
+
+                # Navigate with proxy
+                response = await page.goto(collection_url, timeout=60000)
+                if response and response.status >= 400:
+                    self.logger.warning(f"HTTP {response.status} for {collection_url}")
+                    if proxy and self.proxy_manager:
+                        self.proxy_manager.mark_result(proxy_rec, False, error=f"HTTP {response.status}")
+                    await page.close()
+                    continue
+
+                # Check for CAPTCHA
+                if self.captcha_handler:
+                    should_skip = await self.captcha_handler.should_skip_url(page, "navigator")
+                    if should_skip:
+                        await page.close()
+                        continue
+
                 await page.wait_for_load_state('networkidle')
 
                 # Process collection pages with pagination
@@ -112,6 +156,10 @@ class Navigator:
                     else:
                         # No pagination configured, single page only
                         break
+
+                # Mark successful proxy use
+                if proxy and self.proxy_manager:
+                    self.proxy_manager.mark_result(proxy_rec, True)
 
             except Exception as e:
                 self.logger.error(f"Error processing collection {collection_url}: {e}", exc_info=True)
