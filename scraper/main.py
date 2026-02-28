@@ -86,8 +86,14 @@ class CendojScraper:
         # Get all sentences for the collection
         sentences = await self.navigator.get_sentences(collection)
 
-        # Queue downloads
-        await self.downloader.download_all(sentences)
+        # Check if we're in scrape-only mode
+        if self.config.scrape_only:
+            logger.info(f"Scrape-only mode: Validating URLs for collection {collection.name}")
+            await self.downloader.validate_all(sentences)
+        else:
+            # Queue downloads
+            logger.info(f"Download mode: Starting downloads for collection {collection.name}")
+            await self.downloader.download_all(sentences)
 
     async def cleanup(self):
         """Clean up resources."""
@@ -100,9 +106,15 @@ class CendojScraper:
 @click.option('--config', default='config/settings.yaml', help='Path to config file')
 @click.option('--collection', help='Specific collection to scrape')
 @click.option('--resume', is_flag=True, help='Resume from last successful download')
-def main(config: str, collection: Optional[str], resume: bool):
+@click.option('--scrape-only', is_flag=True, help='Only scrape URLs without downloading files')
+def main(config: str, collection: Optional[str], resume: bool, scrape_only: bool):
     """CLI entry point for Cendoj scraper."""
     scraper = CendojScraper(config)
+    
+    # Override scrape-only setting from CLI
+    if scrape_only:
+        scraper.config.scrape_only = True
+        logger.info("Running in scrape-only mode - URLs will be validated but not downloaded")
 
     try:
         asyncio.run(scraper.initialize())

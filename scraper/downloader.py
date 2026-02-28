@@ -7,10 +7,10 @@ from typing import Optional
 
 from tenacity import retry, retry_if_exception_type, wait_random_exponential
 
-from config.settings import Config
-from scraper.models import Sentence
-from utils.logger import get_logger
-from utils.rate_limiter import RateLimiter
+from config.settings import Settings
+from .models import Sentence
+from .utils.logger import get_logger
+from .utils.rate_limiter import RateLimiter
 
 
 logger = get_logger(__name__)
@@ -22,6 +22,18 @@ class DownloadResult:
     success: bool
     file_path: Optional[str] = None
     error: Optional[str] = None
+    duration: float = 0.0
+
+
+@dataclass
+class ValidationResult:
+    """Result of URL validation."""
+    sentence_id: str
+    accessible: bool
+    status_code: Optional[int] = None
+    content_type: Optional[str] = None
+    error: Optional[str] = None
+    size: Optional[int] = None
     duration: float = 0.0
 
 
@@ -40,15 +52,17 @@ def retry_on_failure(max_attempts: int = 3, wait_min: float = 1, wait_max: float
 class Downloader:
     def __init__(
         self,
-        config: Config,
-        browser_manager: Optional["BrowserManager"] = None
+        config: Settings,
+        database=None,
+        storage_path=None,
+        max_concurrent: int = 4,
+        rate_limit: float = 1.0
     ):
         self.config = config
-        self.browser_manager = browser_manager
-        self.rate_limiter = RateLimiter(rate=config.rate_limit)
-        self.pdf_dir = Path(config.storage_config.get("pdf_dir", "data/pdfs"))
+        self.rate_limiter = RateLimiter(rate=rate_limit)
+        self.pdf_dir = Path(storage_path or config.storage.pdf_dir)
         self.pdf_dir.mkdir(parents=True, exist_ok=True)
-        self.max_concurrent = config.max_concurrent
+        self.max_concurrent = max_concurrent
         self.request_retries = config.request_retries
         self.chunk_size = config.chunk_size
         self.download_timeout = config.download_timeout
@@ -169,8 +183,142 @@ class Downloader:
         async with self.rate_limiter:
             return await self._download_file(sentence, resume)
 
+    async def validate_url(self, sentence: Sentence) -> ValidationResult:
+        """Validate if a sentence PDF URL is accessible without downloading."""
+        start_time = asyncio.get_event_loop().time()
+        
+        try:
+            # Apply rate limiting before starting
+            await self.rate_limiter.wait()
+            
+            import aiohttp
+            async with aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=self.config.validate_url_timeout)
+            ) as session:
+                headers = {"User-Agent": getattr(self.config, "user_agent", "Mozilla/5.0")}
+                async with session.head(sentence.pdf_url, headers=headers) as response:
+                    status_code = response.status
+                    
+                    # Check if URL is accessible
+                    if status_code == 200:
+                        # Get additional information from headers
+                        content_type = response.headers.get("Content-Type", "")
+                        content_length = response.headers.get("Content-Length")
+                        size = int(content_length) if content_length else None
+                        
+                        logger.info(f"URL accessible: {sentence.pdf_url} (Status: {status_code}, Size: {size or 'unknown'})")
+                        
+                        return ValidationResult(
+                            sentence_id=sentence.id,
+                            accessible=True,
+                            status_code=status_code,
+                            content_type=content_type,
+                            size=size,
+                            duration=asyncio.get_event_loop().time() - start_time
+                        )
+                    else:
+                        logger.warning(f"URL not accessible: {sentence.pdf_url} (Status: {status_code})")
+                        
+                        return ValidationResult(
+                            sentence_id=sentence.id,
+                            accessible=False,
+                            status_code=status_code,
+                            error=f"HTTP {status_code}",
+                            duration=asyncio.get_event_loop().time() - start_time
+                        )
+                        
+        except Exception as e:
+            logger.error(f"Error validating URL {sentence.pdf_url}: {e}")
+            
+            return ValidationResult(
+                sentence_id=sentence.id,
+                accessible=False,
+                error=str(e),
+                duration=asyncio.get_event_loop().time() - start_time
+            )
+
+    async def validate_urls_batch(self, sentences: list[Sentence]) -> list[ValidationResult]:
+        """Validate multiple URLs concurrently with rate limiting."""
+        tasks = [self.validate_url(sentence) for sentence in sentences]
+        results = await asyncio.gather(*tasks, return_exceptions=False)
+        return results
+
+    async def validate_all(self, sentences: list[Sentence]) -> tuple[int, int, list[ValidationResult]]:
+        """Validate all URLs without downloading."""
+        logger.info(f"Starting validation of {len(sentences)} URLs")
+        
+        # Track statistics
+        total = len(sentences)
+        validated = 0
+        accessible = 0
+        inaccessible = 0
+        results = []
+        
+        # Process sentences in batches
+        for i in range(0, len(sentences), self.max_concurrent):
+            batch = sentences[i:i + self.max_concurrent]
+            logger.info(f"Validating batch {i//self.max_concurrent + 1}: {len(batch)} URLs")
+            
+            try:
+                validation_results = await self.validate_urls_batch(batch)
+                results.extend(validation_results)
+                
+                for result in validation_results:
+                    validated += 1
+                    if result.accessible:
+                        accessible += 1
+                        logger.info(f"✓ URL accessible: {result.sentence_id} ({validated}/{total}, {result.size or 'unknown'} bytes)")
+                    else:
+                        inaccessible += 1
+                        logger.warning(f"✗ URL inaccessible: {result.sentence_id} - {result.error} ({validated}/{total})")
+                        
+            except Exception as e:
+                logger.error(f"Validation batch failed: {e}")
+                inaccessible += len(batch)
+                validated += len(batch)
+                continue
+                
+        logger.info(f"Validation completed: {accessible} accessible, {inaccessible} inaccessible, {total} total")
+        return accessible, inaccessible, results
+
     async def download_batch(self, sentences: list[Sentence]) -> list[DownloadResult]:
         """Download multiple sentences concurrently with rate limiting."""
         tasks = [self.download(sentence) for sentence in sentences]
         results = await asyncio.gather(*tasks, return_exceptions=False)
         return results
+
+    async def download_all(self, sentences: list[Sentence]):
+        """Download all sentences with error handling and logging."""
+        logger.info(f"Starting download of {len(sentences)} sentences")
+        
+        # Track statistics
+        total = len(sentences)
+        completed = 0
+        successful = 0
+        failed = 0
+        
+        # Process sentences in batches
+        for i in range(0, len(sentences), self.max_concurrent):
+            batch = sentences[i:i + self.max_concurrent]
+            logger.info(f"Processing batch {i//self.max_concurrent + 1}: {len(batch)} sentences")
+            
+            try:
+                results = await self.download_batch(batch)
+                
+                for result in results:
+                    completed += 1
+                    if result.success:
+                        successful += 1
+                        logger.info(f"✓ Downloaded {result.sentence_id} ({completed}/{total})")
+                    else:
+                        failed += 1
+                        logger.error(f"✗ Failed {result.sentence_id}: {result.error} ({completed}/{total})")
+                        
+            except Exception as e:
+                logger.error(f"Batch failed: {e}")
+                failed += len(batch)
+                completed += len(batch)
+                continue
+                
+        logger.info(f"Download completed: {successful} successful, {failed} failed, {total} total")
+        return successful, failed

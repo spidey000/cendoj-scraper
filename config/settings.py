@@ -10,7 +10,73 @@ class Config:
     def _load_config(self) -> dict:
         with open(self.config_path, 'r') as f:
             config = yaml.safe_load(f) or {}
+        self._apply_env_overrides(config)
         return config
+
+    def _apply_env_overrides(self, config: dict):
+        """Apply environment variable overrides to config.
+        
+        Env vars format: CENDOJ__SECTION__KEY=value
+        For nested dicts, use double underscore: CENDOJ__browser__stealth=true
+        For list sections like sites, use array index: CENDOJ__sites__0__name=site1
+        """
+        import os
+        from typing import Any
+        
+        def _set_nested_value(d: dict, keys: list, value: str):
+            """Set a nested value in dict using list of keys."""
+            for key in keys[:-1]:
+                if key not in d:
+                    d[key] = {}
+                d = d[key]
+            final_key = keys[-1]
+            d[final_key] = self._convert_value(value)
+
+        # Prefix for all Cendoj env vars
+        prefix = "CENDOJ__"
+        
+        for env_key, env_value in os.environ.items():
+            if not env_key.startswith(prefix):
+                continue
+            
+            # Remove prefix and split by __
+            parts = env_key[len(prefix):].lower().split('__')
+            if len(parts) < 2:
+                continue  # Need at least section and key
+            
+            _set_nested_value(config, parts, env_value)
+
+    def _convert_value(self, value: str) -> Any:
+        """Convert string value to appropriate type."""
+        # Boolean
+        if value.lower() in ('true', 'false'):
+            return value.lower() == 'true'
+        
+        # Integer
+        try:
+            if value.isdigit() or (value.startswith('-') and value[1:].isdigit()):
+                return int(value)
+        except (ValueError, AttributeError):
+            pass
+        
+        # Float
+        try:
+            if '.' in value:
+                return float(value)
+        except (ValueError, AttributeError):
+            pass
+        
+        # List (comma-separated)
+        if ',' in value:
+            items = [item.strip() for item in value.split(',')]
+            # Try to convert items to appropriate types
+            converted = []
+            for item in items:
+                converted.append(self._convert_value(item))
+            return converted
+        
+        # Default: string
+        return value
 
     def _validate_config(self):
         """Validate required configuration sections exist."""
@@ -142,3 +208,13 @@ class Config:
     def request_timeout(self) -> int:
         """Return request timeout in seconds."""
         return self.request_config.get('timeout', 30)
+
+    @property
+    def scrape_only(self) -> bool:
+        """Return whether to only scrape URLs without downloading."""
+        return self.download_config.get('scrape_only', False)
+
+    @property
+    def validate_url_timeout(self) -> int:
+        """Return timeout for URL validation requests in seconds."""
+        return self.download_config.get('validate_url_timeout', 10)
