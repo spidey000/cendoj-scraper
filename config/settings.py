@@ -256,6 +256,24 @@ class Config:
         """Whether to deduplicate discovered URLs."""
         return self.discovery_config.get('deduplicate', True)
 
+    @property
+    def discovery_follow_internal_links(self) -> bool:
+        """Whether to enqueue internal links during discovery."""
+        return self.discovery_config.get('follow_internal_links', True)
+
+    @property
+    def sitemap_config(self) -> Dict:
+        """Return sitemap discovery configuration."""
+        return self._config.get('sitemap', {
+            'enabled': False,
+            'urls': [],
+            'follow_sitemap_links': True,
+            'max_depth': 3,
+            'max_urls': 5000,
+            'include_patterns': [],
+            'exclude_patterns': [],
+        })
+
     # ========== ANTI-BLOCKING CONFIG ==========
     @property
     def anti_blocking_config(self) -> Dict:

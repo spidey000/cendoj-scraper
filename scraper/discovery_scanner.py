@@ -3,21 +3,23 @@
 import asyncio
 import uuid
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from pathlib import Path
 
-from .browser import BrowserManager
-from .deep_crawler import DeepCrawler
-from .navigator import Navigator
-from ..utils.logger import get_logger
-from ..utils.proxy_manager import ProxyManager
-from ..utils.ua_pool import UserAgentPool
-from ..utils.adaptive_limiter import AdaptiveRateLimiter
-from ..utils.behavior_simulator import BehaviorSimulator
-from ..utils.captcha_handler import CAPTCHAHandler
-from ..storage.database import init_db, get_session, Base
-from ..storage.schemas import DiscoverySession
-from config.settings import Config
+from cendoj.scraper.browser import BrowserManager
+from cendoj.scraper.deep_crawler import DeepCrawler
+from cendoj.scraper.navigator import Navigator
+from cendoj.scraper.strategies.base import DiscoveryStrategy, StrategyResult
+from cendoj.scraper.strategies.sitemap import SitemapStrategy
+from cendoj.utils.logger import get_logger
+from cendoj.utils.proxy_manager import ProxyManager
+from cendoj.utils.ua_pool import UserAgentPool
+from cendoj.utils.adaptive_limiter import AdaptiveRateLimiter
+from cendoj.utils.behavior_simulator import BehaviorSimulator
+from cendoj.utils.captcha_handler import CAPTCHAHandler
+from cendoj.storage.database import init_db, get_session, Base
+from cendoj.storage.schemas import DiscoverySession
+from cendoj.config.settings import Config
 
 logger = get_logger(__name__)
 
@@ -52,6 +54,9 @@ class DiscoveryScanner:
         self.captcha_handler: Optional[CAPTCHAHandler] = None
         self.navigator: Optional[Navigator] = None
         self.deep_crawler: Optional[DeepCrawler] = None
+
+        # Strategy plugins
+        self.strategies: List[DiscoveryStrategy] = []
 
         # DB session
         self.db_session = None
@@ -153,6 +158,10 @@ class DiscoveryScanner:
             behavior_sim=self.behavior_sim
         )
 
+        self._load_strategies()
+        if self.strategies:
+            await asyncio.gather(*(strategy.initialize() for strategy in self.strategies))
+
         self.logger.info("All components initialized successfully")
 
     async def run(self, collections: Optional[list] = None, resume: bool = False):
@@ -173,7 +182,8 @@ class DiscoveryScanner:
             else:
                 # Deep crawl mode
                 self.logger.info(f"Running in {self.config.discovery_mode.upper()} mode (deep crawl)")
-                seed_urls = await self._get_seed_urls(collections)
+                strategy_results = await self._run_strategies()
+                seed_urls = await self._get_seed_urls(collections, strategy_results)
 
                 await self.deep_crawler.initialize(
                     session_id=self.session_id,
@@ -222,42 +232,83 @@ class DiscoveryScanner:
                     'source_url': sentence.metadata.get('source_url', ''),
                     'depth': 0,
                     'method': 'table_css',
-                    'validation': None,
+                    'validation': {},
                     'sentence': sentence,
                 }
 
-    async def _get_seed_urls(self, collections: Optional[list]) -> list:
+    async def _get_seed_urls(self, collections: Optional[list], strategy_results: Optional[List[StrategyResult]] = None) -> list:
         """
-        Get seed URLs for deep crawl.
+        Get seed URLs for deep crawl, combining strategy outputs and config paths.
 
         Args:
             collections: Optional specific collections
+            strategy_results: Optional list of strategy discovery payloads
 
         Returns:
-            List of seed URLs
+            List of deduplicated seed URLs
         """
-        # For now, use Navigator to get initial collection pages
-        # This will be expanded to include sitemap.xml parsing
         urls = []
 
+        if strategy_results:
+            for result in strategy_results:
+                urls.extend(result.seed_urls)
+
         if collections:
-            # Get specific collections from sites config
             sites = self.config.sites
             for site in sites:
                 async with self.navigator as nav:
-                    # Would need to implement collection-specific logic
+                    # Placeholder for collection-specific logic
                     pass
         else:
-            # Use all configured site base URLs + paths
             for site in self.config.sites:
-                if not site.enabled:
+                if not site.get('enabled', True):
                     continue
-                for path in site.paths:
-                    url = site.base_url.rstrip('/') + '/' + path.lstrip('/')
+                base_url = (site.get('base_url') or '').rstrip('/')
+                if not base_url:
+                    continue
+                for path in site.get('paths', []):
+                    if not path:
+                        continue
+                    url = f"{base_url}/{path.lstrip('/')}"
                     urls.append(url)
 
-        self.logger.info(f"Generated {len(urls)} seed URLs")
-        return urls
+        deduped = list(dict.fromkeys(urls))
+        self.logger.info(f"Generated {len(deduped)} seed URLs ({len(urls)} before dedup)")
+        return deduped
+
+    def _load_strategies(self):
+        """Instantiate enabled discovery strategies."""
+        available = [SitemapStrategy]
+        self.strategies = []
+        for strategy_cls in available:
+            strategy = strategy_cls(
+                config=self.config,
+                browser_manager=self.browser_manager,
+                rate_limiter=self.rate_limiter,
+                proxy_manager=self.proxy_manager,
+                ua_pool=self.ua_pool,
+            )
+            if strategy.enabled:
+                self.logger.info(f"Strategy enabled: {strategy.name}")
+                self.strategies.append(strategy)
+            else:
+                self.logger.debug(f"Strategy disabled: {strategy.name}")
+
+    async def _run_strategies(self) -> List[StrategyResult]:
+        """Execute all configured strategies sequentially."""
+        results: List[StrategyResult] = []
+        for strategy in self.strategies:
+            try:
+                self.logger.info(f"Running strategy: {strategy.name}")
+                result = await strategy.discover()
+                if result:
+                    results.append(result)
+                    self.logger.info(
+                        f"Strategy {strategy.name} produced {len(result.seed_urls)} seed URLs"
+                    )
+            except Exception as exc:
+                self.logger.error(f"Strategy {strategy.name} failed: {exc}", exc_info=True)
+        return results
 
     async def _update_session_stats(self):
         """Update discovery session record in DB."""
@@ -293,6 +344,9 @@ class DiscoveryScanner:
     async def cleanup(self):
         """Clean up resources."""
         self.logger.info("Cleaning up DiscoveryScanner...")
+
+        if self.strategies:
+            await asyncio.gather(*(strategy.cleanup() for strategy in self.strategies))
 
         if self.browser_manager:
             await self.browser_manager.stop()

@@ -8,25 +8,46 @@ sites:
     name: "Cendoj Main"
     enabled: true
     paths:
-      - "/contenido.asp?cat=1"  # Sentences by category
-      # Add more paths as needed:
-      # - "/contenido.asp?cat=2"
-      # - "/contenido.asp?trib=1"
+      - "/contenido.asp?cat=1"
     selectors:
       content_table: "table.contenido"
-      row: "table.contenido tr"  # Exclude header
+      row: "table.contenido tr"
       pdf_link: "a[href$='.pdf']"
       pagination:
         enabled: true
         next_page: "a[rel='next'], .pagination a[title='Siguiente'], .next a"
       # Optional selectors for metadata
-      cendoj_number: ".cendoj-number, .numero-exp"  # Adjust as needed
+      cendoj_number: ".cendoj-number, .numero-exp"
       court: ".court-name, .tribunal"
       date: ".fecha, .date"
     patterns:
-      pdf_url: "\.pdf$"
-      date: "\d{2}/\d{2}/\d{4}"
-      cendoj_id: "([A-Z]+\d+/\d+)"
+      pdf_url: '\.pdf$'
+      date: '\d{2}/\d{2}/\d{4}'
+      cendoj_id: '([A-Z]+\d+/\d+)'
+    api:
+      type: "query_last_sentences"
+      index_url: "https://www.poderjudicial.es/search/indexAN.jsp"
+      search_url: "https://www.poderjudicial.es/search/search.action"
+      databasematch: "TS"
+      jurisdictions:
+        - "CIVIL"
+        - "PENAL"
+        - "contencioso"
+        - "SOCIAL"
+        - "MILITAR"
+        - "ESPECIAL"
+      resolution_type: "SENTENCIA"
+      historical: false
+      limit_per_jurisdiction: 50
+      total_limit: 60
+
+# ============================================
+# LEGACY SECTIONS (kept for Config validation)
+# ============================================
+download: {}
+request:
+  timeout: 30
+  retry_attempts: 3
 
 # ============================================
 # DATABASE CONFIGURATION
@@ -58,6 +79,11 @@ sitemap:
   enabled: false
   urls: []  # e.g., ["https://www.cendoj.es/sitemap.xml"]
   follow_sitemap_links: true
+  max_depth: 3
+  max_urls: 5000
+  include_patterns: []  # optional regex filters
+  exclude_patterns: []
+  timeout_seconds: 30
 
 # ============================================
 # ANTI-BLOCKING STACK
