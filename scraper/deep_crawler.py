@@ -15,7 +15,8 @@ from cendoj.scraper.models import Sentence
 from cendoj.scraper.browser import BrowserManager
 from cendoj.utils.logger import get_logger
 from cendoj.storage.database import get_session
-from cendoj.storage.schemas import PDFLink
+from cendoj.storage.schemas import PDFLink, BreadcrumbTrail
+from cendoj.scraper.breadcrumbs import BreadcrumbExtractor
 
 logger = get_logger(__name__)
 
@@ -125,6 +126,31 @@ class DeepCrawler:
 
                 # Visit page
                 try:
+                    # Fast path: if URL is a direct PDF, validate and yield without browser
+                    if url.lower().endswith('.pdf'):
+                        validation = await self._validate_url(url) if self.config.discovery_validate_on_discovery else {}
+                        pdf_data = {
+                            'url': url,
+                            'source_url': source_url,
+                            'depth': depth,
+                            'method': method,
+                            'validation': validation,
+                        }
+                        # Store to DB
+                        pdf_link = await self._store_pdf_link(pdf_data, db_session)
+                        if pdf_link:
+                            pdf_data['db_id'] = pdf_link.id
+                            if self.config.discovery_validate_on_discovery:
+                                pdf_link.status = 'accessible' if validation.get('accessible') else 'broken'
+                                pdf_link.validated_at = datetime.utcnow()
+                                pdf_link.http_status = validation.get('status')
+                                pdf_link.content_length = validation.get('content_length')
+                                db_session.commit()
+                        self.stats['pdfs_found'] += 1
+                        yield pdf_data
+                        self.visited_urls.add(self._normalize_url(url))
+                        continue
+
                     page = await self.browser_manager.new_page()
 
                     # Set user agent if provided
@@ -174,6 +200,12 @@ class DeepCrawler:
                                 db_session.commit()
 
                         yield pdf_data
+
+                    # Extract and record breadcrumbs for this page
+                    try:
+                        await self._extract_and_record_breadcrumbs(page, url, db_session)
+                    except Exception as exc:
+                        logger.debug(f"Breadcrumb extraction failed for {url}: {exc}")
 
                     # Extract internal links for BFS (if not at max depth)
                     if (self.max_depth == 0 or depth < self.max_depth) and self.config.discovery_follow_internal_links:
@@ -279,6 +311,17 @@ class DeepCrawler:
                 unique_pdfs.append(pdf)
 
         return unique_pdfs
+
+    async def _extract_and_record_breadcrumbs(self, page: Page, page_url: str, db_session):
+        """Extract breadcrumb trails from the page and persist to DB."""
+        try:
+            content = await page.content()
+            trails = BreadcrumbExtractor.extract(content, base_url=page_url)
+            recorder = BreadcrumbDBRecorder(db_session)
+            for trail in trails:
+                recorder.record_trail(page_url, trail)
+        except Exception as e:
+            logger.debug(f"Breadcrumb extraction/record failed: {e}")
 
     async def _extract_internal_links(self, page: Page, base_url: str) -> List[str]:
         """

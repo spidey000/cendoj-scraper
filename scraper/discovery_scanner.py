@@ -281,7 +281,16 @@ class DiscoveryScanner:
         from cendoj.scraper.strategies.pattern_generator import PatternGenerator
         from cendoj.scraper.strategies.search_explorer import SearchExplorer
         from cendoj.scraper.strategies.taxonomy import TaxonomyStrategy
-        available = [SitemapStrategy, PatternGenerator, SearchExplorer, TaxonomyStrategy]
+        from cendoj.scraper.strategies.form_discovery import FormDiscoveryStrategy
+        from cendoj.scraper.strategies.archive_probe import ArchiveProbeStrategy
+        available = [
+            SitemapStrategy,
+            PatternGenerator,
+            SearchExplorer,
+            TaxonomyStrategy,
+            FormDiscoveryStrategy,
+            ArchiveProbeStrategy,
+        ]
         self.strategies = []
         for strategy_cls in available:
             strategy = strategy_cls(

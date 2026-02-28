@@ -311,6 +311,19 @@ class Config:
             'exclude_patterns': [],
         })
 
+    @property
+    def form_discovery_config(self) -> Dict:
+        """Return form discovery configuration."""
+        return self._config.get('form_discovery', {
+            'enabled': False,
+            'seed_pages': [],  # list of URLs that contain search forms
+            'max_combinations': 1000,
+            'timeout_seconds': 60,
+            'form_selectors': ['form'],
+            'include_patterns': [],
+            'exclude_patterns': [],
+        })
+
     # ========== ANTI-BLOCKING CONFIG ==========
     @property
     def anti_blocking_config(self) -> Dict:
@@ -515,3 +528,44 @@ class Config:
     def separate_discovery_log(self) -> bool:
         """Whether to use separate log file for discovery."""
         return self.logging_config.get('separate_discovery_log', True)
+
+    # ========== NETWORK INTERCEPTION CONFIG ==========
+    @property
+    def network_interception_config(self) -> Dict:
+        """Return network interception configuration."""
+        return self._config.get('network_interception', {
+            'enabled': False,
+            'capture_json': True,
+            'capture_html': False,
+            'max_requests': 1000,
+        })
+
+    # ========== STRUCTURED DATA CONFIG ==========
+    @property
+    def structured_data_config(self) -> Dict:
+        """Return structured data extraction configuration."""
+        return self._config.get('structured_data', {
+            'enabled': False,
+            'extract_json_ld': True,
+            'extract_microdata': True,
+        })
+
+    # ========== ARCHIVE DISCOVERY CONFIG ==========
+    @property
+    def archive_discovery_config(self) -> Dict:
+        """Return archive/legacy discovery configuration."""
+        return self._config.get('archive_discovery', {
+            'enabled': False,
+            'path_templates': ['/archivos/{year}', '/historico/{year}', '/legacy/{year}'],
+            'start_year': 2000,
+            'max_probes': 500,
+        })
+
+    # ========== COVERAGE ANALYSIS CONFIG ==========
+    @property
+    def coverage_analysis_config(self) -> Dict:
+        """Return coverage analysis configuration."""
+        return self._config.get('coverage_analysis', {
+            'enabled': False,
+            'report_interval': 1000,
+        })

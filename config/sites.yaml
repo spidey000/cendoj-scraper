@@ -124,6 +124,59 @@ taxonomy:
   exclude_patterns: []
 
 # ============================================
+# FORM DISCOVERY (Optional)
+# ============================================
+form_discovery:
+  enabled: false
+  seed_pages: []  # list of URLs containing search forms
+  max_combinations: 1000
+  timeout_seconds: 60
+  form_selectors:
+    - 'form'
+  include_patterns: []
+  exclude_patterns: []
+
+# ============================================
+# ARCHIVE/LEGACY DISCOVERY (Optional)
+# ============================================
+archive_discovery:
+  enabled: false
+  path_templates:
+    - '/archivos/{year}'
+    - '/historico/{year}'
+    - '/legacy/{year}'
+    - '/old/{year}'
+    - '/archive/{year}'
+  start_year: 2000
+  max_probes: 500
+  include_patterns: []
+  exclude_patterns: []
+
+# ============================================
+# NETWORK INTERCEPTION (Optional)
+# ============================================
+network_interception:
+  enabled: false
+  capture_json: true
+  capture_html: false
+  max_requests: 1000
+
+# ============================================
+# STRUCTURED DATA EXTRACTION (Optional)
+# ============================================
+structured_data:
+  enabled: false
+  extract_json_ld: true
+  extract_microdata: true
+
+# ============================================
+# COVERAGE ANALYSIS (Optional)
+# ============================================
+coverage_analysis:
+  enabled: false
+  report_interval: 1000
+
+# ============================================
 # ANTI-BLOCKING STACK
 # ============================================
 anti_blocking:

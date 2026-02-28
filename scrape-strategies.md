@@ -106,15 +106,19 @@ def extract_breadcrumbs(html: str) -> list[str]:
 - **Approach:**
   - Scan pages for `<form>` elements referencing search backends.
   - Submit forms with systematic parameter combinations, handling CSRF tokens and pagination.
+- **Status:** ✅ Implemented. See `scraper/strategies/form_discovery.py`. Parses forms, extracts inputs (text, select, checkbox, radio), enumerates parameter combinations (bounded by max_combinations), and extracts PDF URLs from responses.
 
 ```python
-# scraper/strategies/form_discovery.py (planned)
-for form in soup.find_all('form'):
-    action = urljoin(base_url, form.get('action', ''))
-    base_payload = {inp.get('name'): inp.get('value', '') for inp in form.find_all('input') if inp.get('name')}
-    for overrides in self._enumerate_parameter_sets(form):
-        response = session.post(action, data={**base_payload, **overrides})
-        self._process_html(response.text)
+# scraper/strategies/form_discovery.py (implemented)
+class FormDiscoveryStrategy(DiscoveryStrategy):
+    name = "form_discovery"
+    
+    async def discover(self) -> StrategyResult:
+        for page_url in self._seed_pages:
+            forms = await self._fetch_and_parse_forms(page_url)
+            for form in forms:
+                pdf_urls = await self._submit_form_and_extract(page_url, form)
+                result.seed_urls.extend(pdf_urls)
 ```
 
 ## 7. Network Traffic Interception
@@ -122,16 +126,15 @@ for form in soup.find_all('form'):
 - **Approach:**
   - Extend `BrowserManager` session to log `page.on("requestfinished")` traffic.
   - Reverse engineer API shapes and add new strategies or navigator extensions for them.
+- **Status:** ✅ Implemented. See `scraper/network_interceptor.py`. Provides `NetworkInterceptor` class that attaches to Playwright pages, captures all requests/responses, and categorizes endpoints (JSON, API, PDF, HTML). Also includes `NetworkInterceptorManager` for managing multiple interceptors.
 
 ```python
-# scraper/browser.py (planned hook)
-page.on('requestfinished', lambda request: self.logger.debug("XHR {request.url}"))
-page.on('response', lambda response: asyncio.create_task(self._capture_json(response)))
-
-async def _capture_json(self, response):
-    if 'application/json' in (response.headers.get('content-type') or ''):
-        data = await response.json()
-        self.discovery_bus.publish('json_endpoint', {'url': response.url, 'payload': data})
+# scraper/network_interceptor.py (implemented)
+interceptor = NetworkInterceptor(capture_json=True, max_requests=1000)
+interceptor.attach(page)
+# ... crawl pages ...
+endpoints = interceptor.extract_endpoints()
+# {'json': [...], 'api': [...], 'pdf': [...], 'html': [...]}
 ```
 
 ## 8. Structured Data Extraction
@@ -139,15 +142,14 @@ async def _capture_json(self, response):
 - **Approach:**
   - While crawling, parse `<script type="application/ld+json">` and microdata attributes.
   - Normalize results into `pdf_links` records with high-confidence metadata.
+- **Status:** ✅ Implemented. See `scraper/structured_data.py`. Provides `StructuredDataExtractor` for JSON-LD and Microdata extraction, plus `StructuredDataStrategy` wrapper. Extracts PDF links from structured data and relevant metadata (dates, court, case numbers).
 
 ```python
-# structured data helper
-def extract_structured_data(html: str) -> list[dict]:
-    soup = BeautifulSoup(html, 'html.parser')
-    payloads = []
-    for node in soup.select('script[type="application/ld+json"]'):
-        payloads.append(json.loads(node.string))
-    return payloads
+# scraper/structured_data.py (implemented)
+extractor = StructuredDataExtractor()
+structured = extractor.extract(html, source_url)
+pdf_links = extractor.extract_pdf_links(structured)
+relevant = extractor.extract_relevant_data(structured)
 ```
 
 ## 9. Archive/Legacy Section Detection
@@ -155,14 +157,19 @@ def extract_structured_data(html: str) -> list[dict]:
 - **Approach:**
   - Use heuristics and HEAD requests against known archive patterns.
   - Monitor DNS/host records for legacy `cendoj.es` mirrors and incorporate them into the config.
+- **Status:** ✅ Implemented. See `scraper/strategies/archive_probe.py`. Configurable path templates (`/archivos/{year}`, etc.), iterates over years, probes with HEAD requests, and collects accessible archive URLs.
 
 ```python
-# archive probing snippet
-for pattern in ['/archivos/{year}', '/historico/{year}']:
-    for year in range(2000, datetime.now().year + 1):
-        url = urljoin(site['base_url'], pattern.format(year=year))
-        if await self._head_ok(url):
-            seeds.append(url)
+# scraper/strategies/archive_probe.py (implemented)
+class ArchiveProbeStrategy(DiscoveryStrategy):
+    name = "archive_probe"
+    
+    async def discover(self) -> StrategyResult:
+        for template in self._path_templates:
+            for year in range(self._start_year, current_year + 1):
+                url = urljoin(base_url, template.format(year=year))
+                if await self._head_ok(url):
+                    result.seed_urls.append(url)
 ```
 
 ## 10. Coverage Graph & Gap Analysis
@@ -170,18 +177,15 @@ for pattern in ['/archivos/{year}', '/historico/{year}']:
 - **Approach:**
   - Build a directed graph of visited pages (node attributes include depth, extraction method).
   - Analyze for disconnected subgraphs, missing year ranges, or low branching factors to guide follow-up crawls.
+- **Status:** ✅ Implemented. See `scraper/coverage_analyzer.py`. Provides `CoverageGraph` for directed graph management, `CoverageAnalyzer` for gap analysis (disconnected components, orphan nodes, missing years), and snapshot saving.
 
 ```python
-# scraper/coverage_analyzer.py (planned)
-class CoverageAnalyzer:
-    def __init__(self):
-        self.graph: dict[str, set[str]] = {}
-
-    def add_edge(self, source: str, target: str):
-        self.graph.setdefault(source, set()).add(target)
-
-    def frontier(self):
-        return [node for node, edges in self.graph.items() if not edges]
+# scraper/coverage_analyzer.py (implemented)
+analyzer = CoverageAnalyzer()
+analyzer.build_from_db(session_id)
+gaps = analyzer.analyze_gaps()
+# {'total_nodes': ..., 'disconnected_components': ..., 'recommendations': [...]}
+report = analyzer.generate_report()
 ```
 
 ## 11. Downloader Validation Strategy
@@ -189,19 +193,15 @@ class CoverageAnalyzer:
 - **Approach:**
   - Use HEAD validation (`Downloader.validate_url`) with rate limiting and retries.
   - Track SHA256 checksums, file sizes, and HTTP status for audit trails.
+- **Status:** ✅ Already exists in `scraper/downloader.py`. Integrated into `DeepCrawler` via `discovery_validate_on_discovery` config flag. Performs HEAD requests, tracks HTTP status, content-type, content-length.
 
 ```python
-# scraper/downloader.py
+# scraper/downloader.py (existing)
 async def validate_url(self, sentence: Sentence) -> ValidationResult:
     await self.rate_limiter.wait()
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=self.config.validate_url_timeout)) as session:
         async with session.head(sentence.pdf_url, headers=self._headers()) as response:
-            return ValidationResult(
-                sentence_id=sentence.id,
-                accessible=response.status == 200,
-                status_code=response.status,
-                content_type=response.headers.get('Content-Type'),
-            )
+            return ValidationResult(...)
 ```
 
 ## 12. Anti-Blocking & Resilience Stack
@@ -209,6 +209,7 @@ async def validate_url(self, sentence: Sentence) -> ValidationResult:
 - **Approach:**
   - Rotate proxies via `ProxyManager`, randomize user agents (`UserAgentPool`), simulate human timing with `BehaviorSimulator`, and detect CAPTCHAs via `CAPTCHAHandler`.
   - Combine adaptive rate limiting with session snapshots for safe pause/resume.
+- **Status:** ✅ Fully implemented. Components exist in `utils/` directory: `proxy_manager.py`, `ua_pool.py`, `adaptive_limiter.py`, `behavior_simulator.py`, `captcha_handler.py`, `fingerprint.py`.
 
 ```python
 # utils/proxy_manager.py usage

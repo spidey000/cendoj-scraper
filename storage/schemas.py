@@ -59,6 +59,20 @@ class DownloadLog(Base):
     downloaded_at = Column(DateTime, default=datetime.utcnow)
 
 
+class BreadcrumbTrail(Base):
+    """Stores breadcrumb trails extracted from pages."""
+    __tablename__ = "breadcrumb_trails"
+
+    id = Column(Integer, primary_key=True)
+    page_url = Column(String, nullable=False)  # the page where breadcrumbs were found
+    breadcrumbs = Column(JSON, nullable=False)  # list of {"text": ..., "url": ...}
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index('idx_breadcrumb_page_url', 'page_url'),
+    )
+
+
 # ========== DISCOVERY TABLES ==========
 
 class PDFLink(Base):
